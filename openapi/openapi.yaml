@@ -1,0 +1,669 @@
+openapi: 3.1.0
+info:
+  title: Runner System API
+  version: 1.0.0
+  description: Remote command execution system with PostgreSQL-backed queuing and SSE dispatch
+
+servers:
+  - url: http://localhost:80
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/runners/register:
+    post:
+      summary: Register a runner
+      operationId: registerRunner
+      tags: [Runners]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Runner registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Runner'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/runners/{slug}:
+    get:
+      summary: Get runner details
+      operationId: getRunner
+      tags: [Runners]
+      parameters:
+        - $ref: '#/components/parameters/RunnerSlug'
+      responses:
+        '200':
+          description: Runner details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Runner'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      summary: Deregister a runner
+      operationId: deregisterRunner
+      tags: [Runners]
+      parameters:
+        - $ref: '#/components/parameters/RunnerSlug'
+      responses:
+        '204':
+          description: Runner deregistered successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/runners:
+    get:
+      summary: List runners
+      operationId: listRunners
+      tags: [Runners]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [offline, online, orphaned]
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: List of runners
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Runner'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/runners/{slug}/heartbeat:
+    post:
+      summary: Send heartbeat
+      operationId: sendHeartbeat
+      tags: [Runners]
+      parameters:
+        - $ref: '#/components/parameters/RunnerSlug'
+      responses:
+        '204':
+          description: Heartbeat received
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/runners/{slug}/sse:
+    get:
+      summary: SSE stream for command dispatch
+      operationId: sseStream
+      tags: [Runners]
+      parameters:
+        - $ref: '#/components/parameters/RunnerSlug'
+      responses:
+        '200':
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/runners/{slug}/logs:
+    post:
+      summary: Batch insert logs
+      operationId: batchInsertLogs
+      tags: [Runners]
+      parameters:
+        - $ref: '#/components/parameters/RunnerSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchLogsRequest'
+      responses:
+        '204':
+          description: Logs inserted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/runners/{slug}/metrics:
+    post:
+      summary: Batch insert metrics
+      operationId: batchInsertMetrics
+      tags: [Runners]
+      parameters:
+        - $ref: '#/components/parameters/RunnerSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchMetricsRequest'
+      responses:
+        '204':
+          description: Metrics inserted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/runners/{slug}/result:
+    post:
+      summary: Report command result
+      operationId: reportResult
+      tags: [Runners]
+      parameters:
+        - $ref: '#/components/parameters/RunnerSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultRequest'
+      responses:
+        '204':
+          description: Result recorded successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/commands:
+    post:
+      summary: Send a command
+      operationId: sendCommand
+      tags: [Commands]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandRequest'
+      responses:
+        '200':
+          description: Command queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/commands/{id}:
+    get:
+      summary: Get command details
+      operationId: getCommand
+      tags: [Commands]
+      parameters:
+        - $ref: '#/components/parameters/CommandID'
+      responses:
+        '200':
+          description: Command details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/commands/{id}/kill:
+    post:
+      summary: Kill a running command
+      operationId: killCommand
+      tags: [Commands]
+      parameters:
+        - $ref: '#/components/parameters/CommandID'
+      responses:
+        '204':
+          description: Kill signal sent
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/commands/{id}/logs:
+    get:
+      summary: Get command logs
+      operationId: getCommandLogs
+      tags: [Commands]
+      parameters:
+        - $ref: '#/components/parameters/CommandID'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Command logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Log'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/commands/{id}/metrics:
+    get:
+      summary: Get command metrics
+      operationId: getCommandMetrics
+      tags: [Commands]
+      parameters:
+        - $ref: '#/components/parameters/CommandID'
+        - name: resolution
+          in: query
+          schema:
+            type: string
+            enum: [raw, 1m, 5m]
+            default: raw
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Command metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Metric'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    RunnerSlug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+    CommandID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 100
+
+  schemas:
+    Runner:
+      type: object
+      required: [slug, name, status]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [offline, online, orphaned]
+        concurrency_limit:
+          type: integer
+        gpu_capable:
+          type: boolean
+        active_count:
+          type: integer
+        last_seen:
+          type: string
+          format: date-time
+          nullable: true
+        orphaned_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RegisterRequest:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+          default: []
+        concurrency_limit:
+          type: integer
+          default: 4
+        gpu_capable:
+          type: boolean
+          default: false
+
+    Command:
+      type: object
+      required: [id, target_type, target_value, payload, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+          enum: [slug, tag]
+        target_value:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [queued, claimed, running, success, failed, cancelled, expired]
+        assigned_runner:
+          type: string
+          nullable: true
+        retry_count:
+          type: integer
+        max_retries:
+          type: integer
+        timeout_secs:
+          type: integer
+        exit_code:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        kill_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        claimed_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CommandRequest:
+      type: object
+      required: [target_type, target_value, payload]
+      properties:
+        target_type:
+          type: string
+          enum: [slug, tag]
+        target_value:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        max_retries:
+          type: integer
+          default: 0
+        timeout_secs:
+          type: integer
+          default: 300
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+
+    Log:
+      type: object
+      required: [id, source, line, seq, ts]
+      properties:
+        id:
+          type: integer
+          format: int64
+        command_id:
+          type: string
+          format: uuid
+          nullable: true
+        runner_slug:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [system, stdout, stderr]
+        level:
+          type: string
+          nullable: true
+        line:
+          type: string
+        seq:
+          type: integer
+          format: int64
+        ts:
+          type: string
+          format: date-time
+
+    BatchLogsRequest:
+      type: object
+      required: [logs]
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogEntry'
+
+    LogEntry:
+      type: object
+      required: [source, line, seq, ts]
+      properties:
+        command_id:
+          type: string
+          format: uuid
+          nullable: true
+        source:
+          type: string
+          enum: [system, stdout, stderr]
+        level:
+          type: string
+          nullable: true
+        line:
+          type: string
+        seq:
+          type: integer
+          format: int64
+        ts:
+          type: string
+          format: date-time
+
+    Metric:
+      type: object
+      required: [id, sample_ts]
+      properties:
+        id:
+          type: integer
+          format: int64
+        command_id:
+          type: string
+          format: uuid
+          nullable: true
+        runner_slug:
+          type: string
+          nullable: true
+        cpu_percent:
+          type: number
+          format: float
+          nullable: true
+        mem_mb:
+          type: number
+          format: float
+          nullable: true
+        gpu_percent:
+          type: number
+          format: float
+          nullable: true
+        gpu_mem_mb:
+          type: number
+          format: float
+          nullable: true
+        rolled_up:
+          type: boolean
+        sample_ts:
+          type: string
+          format: date-time
+
+    BatchMetricsRequest:
+      type: object
+      required: [metrics]
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricSample'
+
+    MetricSample:
+      type: object
+      required: [sample_ts]
+      properties:
+        command_id:
+          type: string
+          format: uuid
+          nullable: true
+        cpu_percent:
+          type: number
+          format: float
+          nullable: true
+        mem_mb:
+          type: number
+          format: float
+          nullable: true
+        gpu_percent:
+          type: number
+          format: float
+          nullable: true
+        gpu_mem_mb:
+          type: number
+          format: float
+          nullable: true
+        sample_ts:
+          type: string
+          format: date-time
+
+    ResultRequest:
+      type: object
+      required: [command_id, status]
+      properties:
+        command_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [success, failed, cancelled]
+        exit_code:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

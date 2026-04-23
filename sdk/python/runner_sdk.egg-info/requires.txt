@@ -1,0 +1,5 @@
+httpx>=0.25.0
+sseclient-py>=1.8.0
+
+[dev]
+openapi-python-client>=0.16.0

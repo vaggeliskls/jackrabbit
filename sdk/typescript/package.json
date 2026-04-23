@@ -1,0 +1,21 @@
+{
+  "name": "@runner/sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Runner System",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "generate": "npx @hey-api/openapi-ts -c ../openapi/hey-api.config.ts"
+  },
+  "keywords": ["runner", "sdk", "typescript"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.45.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {}
+}

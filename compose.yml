@@ -1,0 +1,138 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - runner-net
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - runner-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.server.loadbalancer.server.port=8080"
+    develop:
+      watch:
+        # Rebuild only when dependencies change (go.mod, go.sum)
+        - path: ./server/go.mod
+          action: rebuild
+        - path: ./server/go.sum
+          action: rebuild
+        # Rebuild when Go source files change (requires compilation)
+        - path: ./server
+          action: rebuild
+          ignore:
+            - "**/*_test.go"
+            - "**/go.mod"
+            - "**/go.sum"
+
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.transport.respondingtimeouts.readtimeout=0"
+      - "--entrypoints.web.transport.respondingtimeouts.writetimeout=0"
+      - "--entrypoints.web.transport.respondingtimeouts.idletimeout=3600"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+    ports:
+      - "80:80"
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik/dynamic:ro
+      - traefik_certs:/certs
+    environment:
+      TRAEFIK_API_TOKEN: ${TRAEFIK_API_TOKEN}
+    networks:
+      - runner-net
+
+  adminer:
+    image: adminer:latest
+    ports:
+      - "8082:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - runner-net
+
+  client:
+    build:
+      context: .
+      dockerfile: ./client/Dockerfile
+    env_file:
+      - .env.client
+    depends_on:
+      - server
+    networks:
+      - runner-net
+    develop:
+      watch:
+        # Rebuild only when dependencies change
+        - path: ./client/go.mod
+          action: rebuild
+        - path: ./client/go.sum
+          action: rebuild
+        # Rebuild when Go source files change
+        - path: ./client
+          action: rebuild
+          ignore:
+            - "**/*_test.go"
+            - "**/go.mod"
+            - "**/go.sum"
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "8083:80"
+    depends_on:
+      - traefik
+    networks:
+      - runner-net
+    develop:
+      watch:
+        # Sync HTML changes directly without rebuild
+        - path: ./ui/index.html
+          target: /usr/share/nginx/html/index.html
+          action: sync
+        # Rebuild when nginx config or Dockerfile changes
+        - path: ./ui/nginx.conf
+          action: rebuild
+        - path: ./ui/Dockerfile
+          action: rebuild
+
+volumes:
+  pg_data:
+  traefik_certs:
+
+networks:
+  runner-net:
+    driver: bridge

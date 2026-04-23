@@ -1,0 +1,7 @@
+{
+  "slug": "test-runner",
+  "name": "Test Runner",
+  "tags": ["dev", "test"],
+  "concurrency_limit": 4,
+  "gpu_capable": false
+}

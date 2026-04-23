@@ -1,0 +1,36 @@
+http:
+  middlewares:
+    api-auth:
+      forwardAuth:
+        address: "http://server:8080/auth/verify"
+        authResponseHeaders:
+          - "X-Runner-Slug"
+        authRequestHeaders:
+          - "Authorization"
+
+  routers:
+    # Public routes (no auth)
+    public:
+      rule: "Path(`/health`)"
+      entryPoints:
+        - web
+      service: server
+      priority: 100
+
+    # Authenticated API routes
+    api:
+      rule: "PathPrefix(`/api/v1`) || PathPrefix(`/auth`)"
+      entryPoints:
+        - web
+      middlewares:
+        - api-auth
+      service: server
+      priority: 50
+
+  services:
+    server:
+      loadBalancer:
+        servers:
+          - url: "http://server:8080"
+        responseForwarding:
+          flushInterval: "100ms"

@@ -1,0 +1,8 @@
+{
+  "target_type": "runner",
+  "target_value": "my-runner",
+  "payload": {
+    "cmd": "echo 'Hello from my-runner test'"
+  },
+  "timeout_secs": 30
+}

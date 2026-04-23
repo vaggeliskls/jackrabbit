@@ -1,0 +1,116 @@
+version: '3'
+
+env:
+  COMPOSE_FILE: compose.yml
+
+tasks:
+  up:
+    desc: Start all services
+    cmds:
+      - docker compose up -d
+
+  down:
+    desc: Stop all services
+    cmds:
+      - docker compose down
+
+  reset:
+    desc: Reset database and volumes
+    cmds:
+      - docker compose down -v
+      - docker compose up -d postgres
+      - sleep 3
+      - task: migrate
+
+  build:
+    desc: Build all Go modules
+    cmds:
+      - go build -v ./...
+
+  migrate:
+    desc: Run database migrations
+    cmds:
+      - |
+        docker compose exec -T postgres psql -U ${POSTGRES_USER:-runner} -d ${POSTGRES_DB:-runnerdb} < server/migrations/001_create_runners.up.sql
+        docker compose exec -T postgres psql -U ${POSTGRES_USER:-runner} -d ${POSTGRES_DB:-runnerdb} < server/migrations/002_create_commands.up.sql
+        docker compose exec -T postgres psql -U ${POSTGRES_USER:-runner} -d ${POSTGRES_DB:-runnerdb} < server/migrations/003_create_logs.up.sql
+        docker compose exec -T postgres psql -U ${POSTGRES_USER:-runner} -d ${POSTGRES_DB:-runnerdb} < server/migrations/004_create_metrics.up.sql
+        docker compose exec -T postgres psql -U ${POSTGRES_USER:-runner} -d ${POSTGRES_DB:-runnerdb} < server/migrations/005_create_metric_rollups.up.sql
+        docker compose exec -T postgres psql -U ${POSTGRES_USER:-runner} -d ${POSTGRES_DB:-runnerdb} < server/migrations/006_create_log_retention_policies.up.sql
+
+  generate:
+    desc: Generate SDK code from OpenAPI spec
+    cmds:
+      - task: generate:go
+
+  generate:go:
+    desc: Generate Go SDK using oapi-codegen
+    dir: openapi
+    cmds:
+      - go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+      - oapi-codegen -config oapi-codegen.yaml openapi.yaml
+      - cd ../sdk/go && go mod tidy
+
+  run:
+    desc: Run client
+    dir: client
+    cmds:
+      - go run ./cmd/runner start
+
+  register:
+    desc: Register runner
+    dir: client
+    cmds:
+      - go run ./cmd/runner register
+
+  send:
+    desc: Send a command
+    dir: client
+    cmds:
+      - go run ./cmd/runner send "{{.CMD}}"
+
+  logs:
+    desc: Get command logs
+    dir: client
+    cmds:
+      - go run ./cmd/runner logs {{.ID}}
+
+  kill:
+    desc: Kill a command
+    dir: client
+    cmds:
+      - go run ./cmd/runner kill {{.ID}}
+
+  status:
+    desc: Get command status
+    dir: client
+    cmds:
+      - go run ./cmd/runner status {{.ID}}
+
+  ps:
+    desc: Show service status
+    cmds:
+      - docker compose ps
+
+  db:
+    desc: Open database admin
+    cmds:
+      - echo "Adminer available at http://localhost:8082"
+      - cmd /c start http://localhost:8082
+
+  dev:
+    desc: Run server in development mode with hot reload
+    dir: server
+    cmds:
+      - air
+
+  lint:
+    desc: Run linters
+    cmds:
+      - go vet ./...
+      - go fmt ./...
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./...

@@ -1,0 +1,20 @@
+.env
+.env.client
+*.log
+*.exe
+air_tmp/
+tmp/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+client/bin
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
