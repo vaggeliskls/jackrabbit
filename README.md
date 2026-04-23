@@ -70,23 +70,6 @@ docker compose logs -f server
 - **PostgreSQL**: Command queue, logs, metrics, retention policies
 - **Traefik**: Reverse proxy with authentication middleware
 
-## Project Status
-
-All sessions complete! 🎉
-
-✅ **Session 1-2**: Scaffold, data layer, OpenAPI, HTTP & SSE  
-✅ **Session 3**: SDK generation (Go, TypeScript, Python)  
-✅ **Session 4**: Background workers (reaper, retention, rollup)  
-✅ **Session 5**: Client implementation (executor, SSE listener, shippers)  
-✅ **Session 6**: Integration & polish (Traefik auth, E2E tests, documentation)
-
-│  (Runner)   │         │  (HTTP/API)  │         │   (Queue)    │
-└─────────────┘         └──────────────┘         └──────────────┘
-      │                        │                         │
-      │ Logs/Metrics           │ LISTEN/NOTIFY          │
-      └────────────────────────┴─────────────────────────┘
-```
-
 ## Development
 
 ### Building
